@@ -110,7 +110,7 @@ class Streetlight:
 	def is_on(self,cont):
 		self.cont=cont
 		self.resultats.append(self.data)
-		print "Streetlight "+str(self.id)+" valor " +str(self.lamport)+ " escrit"
+		
 	# funcio per escriure a fitxer
 	
 	def log(self):
@@ -193,6 +193,9 @@ class Server:
 		self.cont=[0,0,0]	# vector de contadors de cada Streetlight
 		self.database=[]
 		self.cont_commit=0
+	
+	# funcio per a connectar server i databases
+	# @param variable de tipus database
 		
 	def connect_database(self,database):
 		self.database.append(database)
@@ -240,40 +243,36 @@ class Server:
 		
 		
 		for i in self.database:	
-			if(i.vote(lamport,index)==True):
+			if(i.vote(lamport,index)==True):		# contem quantes databases estan a favor del commit
 				self.cont_commit+=1
 		
 			
 				
-		if (self.cont_commit==len(self.database)):
+		if (self.cont_commit==len(self.database)):	# mirem si totes les database estan a favor
 			self.cont_commit=0
 			#print "commit"
 			for i in self.database:
-				i.commit(lamport,index)
-			
+				i.commit(lamport,index)				# indiquem a les databases que el commit es realitzara i que actualitzin el seu lamport clock
+			print "Lamport "+str(lamport)+" de Streetlight "+str(index+1)+" commited"
 			self.queue.switch(self.opcio,index,self.cont[index])				# canviem estat segons opcio
 			
 		else:
-			print "abort"
+			print "Lamport "+str(lamport)+ " Streetlight "+str(index+1)+ " aborted"
 			for i in self.database:
-				i.abort(lamport)
+				i.abort(lamport)					# indica a les databases que el commit no es realitzara
 			sleep(1)	
-			self.queue.send(self.inf[index],index,on,cont,lamport)	
+			self.queue.send(self.inf[index],index,on,cont,lamport)	# reenvia dada a la cua
 			
 		
 class Database:
 	_sync={'vote':1,'commit':2,'abort':2}
-	_async=['set_lamport','connect_server']
+	_async=['set_lamport']
 	_parallel=[]
 	_ref=[]
     
 	def __init__(self):
 		self.lamp_clock=[0,0,0]	# vector de contadors de cada Streetlight
-		self.servers=[]
 		
-	
-	def connect_server(self,serv):
-		self.servers.append(serv)
 		
 	
 	
@@ -300,7 +299,7 @@ class Database:
 					
 	def commit(self,lamport,index):
 		
-		#print "Lamport "+str(index)+":"+str(self.lamp_clock[index])
+		
 		filename=str(self.id)+".txt"
 		f= open(filename,'a+')
 		
@@ -402,9 +401,6 @@ def test():
 	s1.connect_database(db1)
 	s1.connect_database(db2)
 	#s1.connect_database(db3)
-	db1.connect_server(s1)
-	db2.connect_server(s1)
-	#db3.connect_server(s1)
 	s1.set_queue_server(q)			# conectem servidors amb cua
 	q.add_server(s1)				# conectem cua amb servidors
 	
@@ -413,9 +409,6 @@ def test():
 		s2.connect_database(db1)
 		s2.connect_database(db2)
 		#s2.connect_database(db3)
-		db1.connect_server(s2)
-		db2.connect_server(s2)
-		#db3.connect_server(s2)
 		s2.set_queue_server(q)		# conectem servidors amb cua
 		q.add_server(s2)			# conectem cua amb servidors	
 	

@@ -42,7 +42,7 @@ class Sensor:
     def update(self):
 		
 		if (self.i<len(self.list_SL[0])):		# enviar tants valors com tamany de llista
-			#print "Index d'informacio:" +str(self.i) # feedfack de quin valor ha enviat
+			print "Index d'informacio:" +str(self.i) # feedfack de quin valor ha enviat
 		   
 			self.subscribers[0].input_data(self.list_SL[0][self.i],0,self.i)	# enviar valor index al Streetlight 0
 			self.subscribers[1].input_data(self.list_SL[1][self.i],1,self.i)	# enviar valor index al Streetlight 1
@@ -71,7 +71,7 @@ class Streetlight:
 		self.data=0				# valor actual rebut
 		self.resultats=[]		# llista a escriure a fitxer de sortida
 		self.cont=0
-		self.lamport=0
+	
 	# funcio per conectar Streetlight i cua
 	# param: queue(cua), index(index Streetlight)
 		
@@ -90,7 +90,6 @@ class Streetlight:
 	def input_data(self,data,index,lamport):
 		self.data=data
 		self.index=index
-		self.lamport=lamport
 		self.queue.send(self.data,self.index,self.on,self.cont,lamport)	# envia dada a cua
 		
 	# funcio per conectar el Streetlight		
@@ -110,7 +109,7 @@ class Streetlight:
 	def is_on(self,cont):
 		self.cont=cont
 		self.resultats.append(self.data)
-		
+
 	# funcio per escriure a fitxer
 	
 	def log(self):
@@ -192,17 +191,15 @@ class Server:
 		self.cont=[0,0,0]	# vector de contadors de cada Streetlight
 		self.database=[]
 		self.cont_commit=0
-	
-	
-	# funcio per a connectar server i databases
-	# @param varaible de tipus database
+		self.database_down=0
+	# connectem server i databases
 		
 	def connect_database(self,database):
 		self.database.append(database)
 	
 		 
-	# funcio per a connectar server amb cua
-	# param: queue(cua)
+	# funcio per a conectar server amb cua
+	#param: queue(cua)
 	
 	
 	def set_queue_server(self,queue):
@@ -212,7 +209,6 @@ class Server:
 	# param: inf (dada actual), index (index Streetlight), cont(contador Streetlight), on(estat actual Streetlight)
 		
 	def push_data(self,inf,index,on,cont,lamport,index_server):
-		
 		
 		
 		print 'Informacio streetlight ' + str(index+1) +': ' + str(inf) # feedback
@@ -239,37 +235,48 @@ class Server:
 		
 		
 		
-		for i in self.database:	
-			if(i.vote(lamport,index)==True):		# contem quantes databases estan a favor del commit
-				self.cont_commit+=1
-		
+		for i in self.database:
+			if(i.get_alive()==True):		# nomes te en compte si database respon
+				if(i.vote(lamport,index)==True):							# contem quantes databases estan a favor de realitzar el commit
+					self.cont_commit+=1
+			else:
+				self.database_down+=1		# augmenta contador database caigudes
 			
 				
-		if (self.cont_commit==len(self.database)):	# mira si totes les databases estan a favor del commit
-			self.cont_commit=0
-			#print "commit"
-			for i in self.database:
-				i.commit(lamport,index)				# indica a databases que el commit es realitzara i que actualitzin el seu lamport clock
+		if (self.cont_commit==(len(self.database)-self.database_down)):	# si totes les databases hi estan a favor
+			self.cont_commit=0											# reiniciem contadors
+			self.database_down=0
+			
+			for i in self.database:	
+				if(i.get_alive()==True):
+					i.commit(lamport,index)									# indiquem a les databases que poden actualizar el seu lamport clock
 			print "Lamport "+str(lamport)+" de Streetlight "+str(index+1)+" commited"
-			self.queue.switch(self.opcio,index,self.cont[index])				# canviem estat segons opcio
+			self.queue.switch(self.opcio,index,self.cont[index])		# canviem estat segons opcio
 			
 		else:
 			print "Lamport "+str(lamport)+ " Streetlight "+str(index+1)+ " aborted"
 			for i in self.database:
-				i.abort(lamport)					# indica a les databases que el commit no es realitzara
-				
-			self.queue.send(self.inf[index],index,on,cont,lamport)	# reenvia la dada a la cua
+				if(i.get_alive()==True):
+					i.abort(lamport)										# indiquem a les databases que no es realitza el commit
+			sleep(1)	
+			self.queue.send(self.inf[index],index,on,cont,lamport)		# reenviem les dades a la cua
 			
 		
+			
+		
+			
+			
+
+
 class Database:
-	_sync={'vote':1,'commit':1,'abort':1}
-	_async=['set_lamport']
+	_sync={'vote':1,'commit':2,'abort':2,'get_alive':1,'set_alive':1}
+	_async=['set_lamport','connect_server']
 	_parallel=[]
 	_ref=[]
     
 	def __init__(self):
 		self.lamp_clock=[0,0,0]	# vector de contadors de cada Streetlight
-		
+		self.alive=True
 		
 	
 	
@@ -278,6 +285,9 @@ class Database:
 	
 	def vote(self,data,index):
 		
+		
+			
+			
 		filename=str(self.id)+".txt"
 		f= open(filename,'w')
 			
@@ -290,12 +300,20 @@ class Database:
 		
 		else:
 			return True	
+		
 				
 			
-							
+	# votacio satisfactoria
+	# actualitzar lamport clock de database i esborrar de fitxer
+	# el clock temporal						
 					
 	def commit(self,lamport,index):
 		
+		if(int(self.id)==2):
+			print "Database 2 caiguda"		# simulacio de caiguda de database 2
+			self.set_alive(None)
+			
+		#print "Lamport "+str(index)+":"+str(self.lamp_clock[index])
 		filename=str(self.id)+".txt"
 		f= open(filename,'a+')
 		
@@ -303,8 +321,13 @@ class Database:
 			if (line==lamport):
 				str(self.id)+".txt".remove(line)
 		self.lamp_clock[index]=lamport
+		
 		f.close()
 		
+		
+	
+	# votacio insatifactoria
+	# esborrat de lamport temporal del fitxer 	
 		
 	def abort(self,lamport):	
 		filename=str(self.id)+".txt"
@@ -314,8 +337,15 @@ class Database:
 			if (line==lamport):
 				str(self.id)+".txt".remove(line)
 		f.close()
+	
+	def get_alive(self):
+		return self.alive	
+	
+	
+	def set_alive(self,value):
+		self.alive=value
 		
-		
+			
 class Write_file():
 	
 	_sync = {}
@@ -340,9 +370,9 @@ class Write_file():
 	
 	def write(self):
 
-		print 'Escribint resultats al fitxer ResultatsB2.txt'
+		print 'Escribint resultats al fitxer ResultatsB4.txt'
 
-		f= open('ResultatsB2.txt','w')
+		f= open('ResultatsB4.txt','w')
 
 		for i in self.resultats:
 			f.writelines("%s\n" % i)
@@ -353,64 +383,54 @@ class Write_file():
 
 def test():
 	
-	num_servers=2
-	
-	
-	
-	
 	host=init_host()
-	sensor=host.spawn_id('1','SD_Task2_B','Sensor',[])
-	sl1=host.spawn_id('1','SD_Task2_B','Streetlight',[])
-	sl2=host.spawn_id('2','SD_Task2_B','Streetlight',[])
-	sl3=host.spawn_id('3','SD_Task2_B','Streetlight',[])
-	q= host.spawn_id('1','SD_Task2_B','Queue',[])
+	sensor=host.spawn_id('1','SD_Task2_D','Sensor',[])
+	sl1=host.spawn_id('1','SD_Task2_D','Streetlight',[])
+	sl2=host.spawn_id('2','SD_Task2_D','Streetlight',[])
+	sl3=host.spawn_id('3','SD_Task2_D','Streetlight',[])
+	q= host.spawn_id('1','SD_Task2_D','Queue',[])
 
 	
-	l=host.spawn_id('1','SD_Task2_B','Write_file',[])
+	l=host.spawn_id('1','SD_Task2_D','Write_file',[])
 
 
-	sensor.subscribe(sl1)	# conectem clients al sensor
+	sensor.subscribe(sl1)	# connectem clients al sensor
 	sensor.subscribe(sl2)
 	sensor.subscribe(sl3)
 	
-	sl1.set_log(l)		# conectem clients amb classe per escriure a arxiu
-	sl2.set_log(l)		# conectem clients amb classe per escriure a arxiu
-	sl3.set_log(l)		# conectem clients amb classe per escriure a arxiu
+	sl1.set_log(l)		# connectem clients amb classe per escriure a arxiu
+	sl2.set_log(l)		# connectem clients amb classe per escriure a arxiu
+	sl3.set_log(l)		# connectem clients amb classe per escriure a arxiu
 	
 	
-	sl1.set_queue(q,0)		# conectem clients amb cua
+	sl1.set_queue(q,0)		# connectem clients amb cua
 	sl2.set_queue(q,1)
 	sl3.set_queue(q,2)
 	
-	q.connect_queue(sl1)	# conectem cua amb clients
+	q.connect_queue(sl1)	# connectem cua amb clients
 	q.connect_queue(sl2)
 	q.connect_queue(sl3)
 	
 	
-	s1=host.spawn_id('1','SD_Task2_B','Server',[])
-	s2=host.spawn_id('2','SD_Task2_B','Server',[])
+	s1=host.spawn_id('1','SD_Task2_D','Server',[])
+	
+	db1=host.spawn_id('1','SD_Task2_D','Database',[])
+	db2=host.spawn_id('2','SD_Task2_D','Database',[])
+	
+	s1.connect_database(db1)		# connectem servidors amb database
+	s1.connect_database(db2)
 	
 	
-	db1=host.spawn_id('1','SD_Task2_B','Database',[])
-	db2=host.spawn_id('2','SD_Task2_B','Database',[])
-	db3=host.spawn_id('3','SD_Task2_B','Database',[])
+	s1.set_queue_server(q)			# connectem servidors amb cua
+	q.add_server(s1)				# connectem cua amb servidors
 	
-	s1.set_queue_server(q)			# conectem servidors amb cua
-	q.add_server(s1)				# conectem cua amb servidors
-	
-	
-	if(num_servers==2):
-		s2.connect_database(db1)
-		s2.connect_database(db2)
-		#s2.connect_database(db3)
-		s2.set_queue_server(q)		# conectem servidors amb cua
-		q.add_server(s2)			# conectem cua amb servidors	
+
 	
 	sensor.start('arxiu.txt')
 
 	sensor.start_interval()
 
-	sleep(30)			# esperar a tenir tots els valors
+	sleep(27)			# esperar a tenir tots els valors
 	sl1.log()
 	sl2.log()
 	sl3.log()

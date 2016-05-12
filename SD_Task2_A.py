@@ -191,6 +191,8 @@ class Server:
 		self.cont=[0,0,0]	# vector de contadors de cada Streetlight
 		self.database=[]
 		self.cont_commit=0
+	
+	# connectem server i databases
 		
 	def connect_database(self,database):
 		self.database.append(database)
@@ -234,24 +236,25 @@ class Server:
 		
 		
 		for i in self.database:	
-			if(i.vote(lamport,index)==True):
+			if(i.vote(lamport,index)==True):							# contem quantes databases estan a favor de realitzar el commit
 				self.cont_commit+=1
 		
 			
 				
-		if (self.cont_commit==len(self.database)):
-			self.cont_commit=0
-			#print "commit"
-			for i in self.database:
-				i.commit(lamport,index)
+		if (self.cont_commit==len(self.database)):						# si totes les databases hi estan a favor
+			self.cont_commit=0											# reiniciem contador
 			
-			self.queue.switch(self.opcio,index,self.cont[index])				# canviem estat segons opcio
+			for i in self.database:	
+				i.commit(lamport,index)									# indiquem a les databases que poden actualizar el seu lamport clock
+			print "Lamport "+str(lamport)+" de Streetlight "+str(index+1)+" commited"
+			self.queue.switch(self.opcio,index,self.cont[index])		# canviem estat segons opcio
 			
 		else:
+			print "Lamport "+str(lamport)+ " Streetlight "+str(index+1)+ " aborted"
 			for i in self.database:
-				i.abort(lamport)
+				i.abort(lamport)										# indiquem a les databases que no es realitza el commit
 			sleep(1)	
-			self.queue.send(self.inf[index],index,on,cont,lamport)	
+			self.queue.send(self.inf[index],index,on,cont,lamport)		# reenviem les dades a la cua
 			
 		
 			
@@ -268,11 +271,7 @@ class Database:
     
 	def __init__(self):
 		self.lamp_clock=[0,0,0]	# vector de contadors de cada Streetlight
-		self.servers=[]
 		
-	
-	def connect_server(self,serv):
-		self.servers.append(serv)
 		
 	
 	
@@ -295,7 +294,9 @@ class Database:
 			return True	
 				
 			
-							
+	# votacio satisfactoria
+	# actualitzar lamport clock de database i esborrar de fitxer
+	# el clock temporal						
 					
 	def commit(self,lamport,index):
 		
@@ -309,7 +310,10 @@ class Database:
 		self.lamp_clock[index]=lamport
 		
 		f.close()
-		
+	
+	
+	# votacio insatifactoria
+	# esborrat de lamport temporal del fitxer 	
 		
 	def abort(self,lamport):	
 		filename=str(self.id)+".txt"
@@ -358,7 +362,7 @@ class Write_file():
 
 def test():
 	
-	i=1
+	
 	
 	
 	
@@ -373,20 +377,20 @@ def test():
 	l=host.spawn_id('1','SD_Task2_A','Write_file',[])
 
 
-	sensor.subscribe(sl1)	# conectem clients al sensor
+	sensor.subscribe(sl1)	# connectem clients al sensor
 	sensor.subscribe(sl2)
 	sensor.subscribe(sl3)
 	
-	sl1.set_log(l)		# conectem clients amb classe per escriure a arxiu
-	sl2.set_log(l)		# conectem clients amb classe per escriure a arxiu
-	sl3.set_log(l)		# conectem clients amb classe per escriure a arxiu
+	sl1.set_log(l)		# connectem clients amb classe per escriure a arxiu
+	sl2.set_log(l)		# connectem clients amb classe per escriure a arxiu
+	sl3.set_log(l)		# connectem clients amb classe per escriure a arxiu
 	
 	
-	sl1.set_queue(q,0)		# conectem clients amb cua
+	sl1.set_queue(q,0)		# connectem clients amb cua
 	sl2.set_queue(q,1)
 	sl3.set_queue(q,2)
 	
-	q.connect_queue(sl1)	# conectem cua amb clients
+	q.connect_queue(sl1)	# connectem cua amb clients
 	q.connect_queue(sl2)
 	q.connect_queue(sl3)
 	
@@ -398,24 +402,14 @@ def test():
 	db1=host.spawn_id('1','SD_Task2_A','Database',[])
 	db2=host.spawn_id('2','SD_Task2_A','Database',[])
 	db3=host.spawn_id('3','SD_Task2_A','Database',[])
-	s1.connect_database(db1)
+	s1.connect_database(db1)		# connectem servidors amb database
 	s1.connect_database(db2)
 	s1.connect_database(db3)
-	db1.connect_server(s1)
-	db2.connect_server(s1)
-	db3.connect_server(s1)
-	s1.set_queue_server(q)			# conectem servidors amb cua
-	q.add_server(s1)				# conectem cua amb servidors
 	
+	s1.set_queue_server(q)			# connectem servidors amb cua
+	q.add_server(s1)				# connectem cua amb servidors
 	
-	#s2.connect_database(db1)
-	#s2.connect_database(db2)
-	#s2.connect_database(db3)
-	#db1.connect_server(s2)
-	#db2.connect_server(s2)
-	#db3.connect_server(s2)
-	#s2.set_queue_server(q)			# conectem servidors amb cua
-	#q.add_server(s2)		# conectem cua amb servidors	
+
 	
 	sensor.start('arxiu.txt')
 
