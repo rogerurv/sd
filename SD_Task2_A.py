@@ -116,6 +116,8 @@ class Streetlight:
 
 		self.write.log(self.resultats)	# cridem al log de la cua
 		
+		print self.resultats
+		
 class Queue:
 	_sync = {}
 	_async = ['connect_queue','add_server','send','switch','write','log']
@@ -417,11 +419,12 @@ def test():
 
 	sleep(27)			# esperar a tenir tots els valors
 	sl1.log()
+	sleep(1)
 	sl2.log()
+	sleep(1)
 	sl3.log()
-	
+	sleep(1)
 
-	sleep(3)			# esperar a escriure a llista els resultats
 	l.write()
 	
 if __name__ == '__main__':

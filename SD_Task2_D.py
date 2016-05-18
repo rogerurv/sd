@@ -116,6 +116,9 @@ class Streetlight:
 
 		self.write.log(self.resultats)	# cridem al log de la cua
 		
+		print self.resultats
+		
+		
 class Queue:
 	_sync = {}
 	_async = ['connect_queue','add_server','send','switch','write','log']
@@ -309,8 +312,8 @@ class Database:
 					
 	def commit(self,lamport,index):
 		
-		if(int(self.id)==2):
-			print "Database 2 caiguda"		# simulacio de caiguda de database 2
+		if(int(self.id)==2 and lamport==6):
+			print "Database 2 caiguda"		# simulacio de caiguda de database 2 a lamport 6
 			self.set_alive(None)
 			
 		#print "Lamport "+str(index)+":"+str(self.lamp_clock[index])
@@ -432,11 +435,11 @@ def test():
 
 	sleep(27)			# esperar a tenir tots els valors
 	sl1.log()
+	sleep(1)
 	sl2.log()
+	sleep(1)
 	sl3.log()
-	
-
-	sleep(3)			# esperar a escriure a llista els resultats
+	sleep(1)			# esperar a escriure a llista els resultats
 	l.write()
 	
 if __name__ == '__main__':

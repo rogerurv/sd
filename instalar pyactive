@@ -1,0 +1,8 @@
+#!/bin/bash
+
+git clone https://github.com/cloudspaces/pyactive.git
+cd pyactive/pyactive_project/
+sudo apt-get update
+wget https://bootstrap.pypa.io/ez_setup.py -O - | sudo python
+sudo python setup.py install
+
